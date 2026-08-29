@@ -1,0 +1,3 @@
+filename_prefix = "from-tfvars"
+secret_token    = "token-from-file"
+pet_length      = 4
