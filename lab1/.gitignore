@@ -1,6 +1,5 @@
 .terraform/
-terraform.tfstate
-terraform.tfstate.backup
+terraform.tfstate*
 .terraform.lock.hcl
 .terragrunt-cache/
 *.tfvars
