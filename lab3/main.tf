@@ -17,7 +17,7 @@ locals {
 # Динамически вызываем наш модуль для каждого элемента из locals.environments
 module "config_environments" {
   source   = "./modules/config-file" # Путь к созданной нами папке модуля
-  for_each = local.environments       # Запуск цикла по мапе
+  for_each = local.environments      # Запуск цикла по мапе
 
   # each.key — это ключ мапы (dev, stage, prod)
   # each.value — это значение мапы (development-backend, staging-backend, ...)
