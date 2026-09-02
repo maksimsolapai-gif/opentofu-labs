@@ -1,0 +1,224 @@
+# 06.IasC.Terraform.and.Terragrunt.Workshop
+---
+
+### 📁 Final Repository Directory Structure
+
+В соответствии с требованиями воркшопа и принципом DRY (Don't Repeat Yourself), проект организован следующим образом:
+
+```text
+06.IasC.Terraform.and.Terragrunt.Workshop/
+├── README.md                          # Этот отчет по лабораторной работе
+├── root.hcl                           # Корневой конфигурационный файл Terragrunt
+├── modules/                           # Переиспользуемый модуль хостов
+│   └── proxmox-hosts/
+│       ├── containers.tf
+│       ├── locals.tf
+│       ├── outputs.tf
+│       ├── variables.tf
+│       ├── versions.tf
+│       └── vms.tf
+├── terraform/                         # Корневая конфигурация чистого OpenTofu
+│   ├── main.tf
+│   ├── providers.tf
+│   ├── terraform.tfstate
+│   ├── variables.tf
+│   └── versions.tf
+└── terragrunt/                        # Конфигурационный юнит Terragrunt студента
+    └── terragrunt.hcl
+```
+
+---
+
+### 📋 Homework Assignment 1: Naming and Addressing Scheme
+
+### Исходные данные студента
+* **Student ID:** 4
+* **Pool ID:** student-04
+* **Расчет индекса n:** n = 4 × 2 - 1 = 7
+
+### Инвентарная таблица созданных хостов
+Все хосты используют маску сети `/16` и сетевой шлюз `192.168.37.1`.
+
+| Ресурс (Тип) | Имя хоста | VMID | IP-адрес | Назначение / Будущий воркшоп |
+| :--- | :--- | :--- | :--- | :--- |
+| LXC Container | `ws-4` | **2004** | **192.168.201.4** | 08. Ansible. Workshop |
+| LXC Container | `sa-7` | **3007** | **192.168.202.7** | 08. Ansible. Workshop |
+| LXC Container | `sa-8` | **3008** | **192.168.202.8** | 08. Ansible. Workshop |
+| VM (Клон) | `k3s-4` | **1304** | **192.168.203.4** | 11. Kubernetes installation (k3s) |
+| VM (Клон) | `k8s-7` | **1807** | **192.168.208.7** | 11. Kubernetes installation (kubespray) |
+| VM (Клон) | `k8s-8` | **1808** | **192.168.208.8** | 11. Kubernetes installation (kubespray) |
+
+### Ответы на теоретические вопросы:
+Explain in your README why the sandbox and k8s hosts are numbered in pairs (n, n+1) while ws and k3s use the plain student_id
+1. **Почему `sandbox` и `k8s` хосты нумеруются парами `(n, n+1)`, а `ws` и `k3s` используют обычный `student_id`?**
+   * Хосты `ws` (Ansible) и `k3s` (легковесный Kubernetes) создаются в единственном экземпляре на каждого студента для выполнения персональных однонодовых задач. 
+   * Хосты `k8s` (ноды для полноценного кластера Kubespray) требуются в количестве **двух штук** на студента для отработки многонодовых конфигураций, распределения ролей (master/worker), настройки репликации и сетевого взаимодействия внутри кластеров.
+
+Explain why each student needs a separate VMID block and a separate pool, and which of the two is the hard limit.
+2. **Зачем каждому студенту отдельный блок VMID и пул? Какое из ограничений является жестким (hard limit)?**
+   * **Разделение пулов (Pools):** Используется для разграничения прав доступа (RBAC) на уровне Proxmox VE. API-токен студента имеет права `VM.Allocate` и `VM.Audit` только внутри конкретного пула `student-04`. Это логическое ограничение видимости ресурсов.
+   * **Разделение блоков VMID:** Это **жесткое ограничение (hard limit)** на уровне всего кластера Proxmox. Идентификаторы VMID должны быть абсолютно уникальными в рамках всей системы. Если бы два студента попытались создать виртуальную машину с одинаковым VMID, произошел бы критический конфликт на уровне конфигурации гипервизора, и Proxmox API отклонил бы запрос.
+
+---
+
+## 🛠️ Homework Assignment 2: Provision the hosts with OpenTofu
+
+### Шаги выполнения
+1. Экспортированы переменные окружения для работы с провайдером Proxmox (без сохранения секретов в коде): `PROXMOX_VE_ENDPOINT`, `PROXMOX_VE_API_TOKEN`, `PROXMOX_VE_INSECURE=true`, `TG_TF_PATH=tofu`.
+2. Сгенерирована пара SSH-ключей командой `ssh-keygen`.
+3. Выполнена инициализация в папке `terraform/`: `tofu init`.
+4. Запущен предварительный просмотр плана: `tofu plan -var student_id=4 -var pool_id=student-04` (План показал создание **6 ресурсов**).
+5. Выполнено применение конфигурации: `tofu apply -var student_id=4 -var pool_id=student-04`.
+
+### Проверка идемпотентности
+При повторном вызове команды `tofu apply` инфраструктура осталась без изменений, что подтверждает свойство идемпотентности декларативного подхода IaaC:
+```
+No changes. Your infrastructure matches the configuration.
+
+OpenTofu has compared your real infrastructure against your configuration and found no differences, so no changes are needed
+
+Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+
+```
+
+### Вывод команды `tofu output`
+
+```
+terraform$ tofu output
+ansible_target = {
+  "ip" = "192.168.201.4"
+  "name" = "ws-4"
+  "vmid" = 2004
+}
+inventory_table = <<EOT
+| host | vmid | ip | purpose |
+| --- | --- | --- | --- |
+| ws-4 | 2004 | 192.168.201.4 | Ansible workshop target (08) |
+| sa-7 | 3007 | 192.168.202.7 | sandbox |
+| sa-8 | 3008 | 192.168.202.8 | sandbox |
+| k3s-4 | 1304 | 192.168.203.4 | k3s cluster (11) |
+| k8s-7 | 1807 | 192.168.208.7 | kubespray cluster (11) |
+| k8s-8 | 1808 | 192.168.208.8 | kubespray cluster (11) |
+EOT
+k3s_nodes = [
+  {
+    "ip" = "192.168.203.4"
+    "name" = "k3s-4"
+    "vmid" = 1304
+  },
+]
+k8s_nodes = [
+  {
+    "ip" = "192.168.208.7"
+    "name" = "k8s-7"
+    "vmid" = 1807
+  },
+  {
+    "ip" = "192.168.208.8"
+    "name" = "k8s-8"
+    "vmid" = 1808
+  },
+]
+sandboxes = [
+  {
+    "ip" = "192.168.202.7"
+    "name" = "sa-7"
+    "vmid" = 3007
+  },
+  {
+    "ip" = "192.168.202.8"
+    "name" = "sa-8"
+    "vmid" = 3008
+  },
+]
+```
+
+---
+
+## 📦 Homework Assignment 3: Terragrunt Integration
+
+### Часть вывода команды `terragrunt plan`
+```text
+/06.IasC.Terraform.and.Terragrunt.Workshop/terragrunt$ terragrunt plan
+16:51:00.595 STDOUT tofu: OpenTofu used the selected providers to generate the following execution
+16:51:00.595 STDOUT tofu: plan. Resource actions are indicated with the following symbols:
+16:51:00.595 STDOUT tofu:   + create
+16:51:00.595 STDOUT tofu: OpenTofu will perform the following actions:
+16:51:00.596 STDOUT tofu:   # proxmox_virtual_environment_container.aws will be created
+16:51:00.596 STDOUT tofu:   + resource "proxmox_virtual_environment_container" "aws" {
+16:51:00.596 STDOUT tofu:       + id             = (known after apply)
+16:51:00.596 STDOUT tofu:       + ipv4           = (known after apply)
+16:51:00.596 STDOUT tofu:       + ipv6           = (known after apply)
+16:51:00.596 STDOUT tofu:       + node_name      = "pve"
+16:51:00.596 STDOUT tofu:       + pool_id        = "student-04"
+16:51:00.597 STDOUT tofu:       + protection     = false
+16:51:00.597 STDOUT tofu:       + start_on_boot  = true
+16:51:00.597 STDOUT tofu:       + started        = true
+16:51:00.597 STDOUT tofu:       + template       = false
+16:51:00.597 STDOUT tofu:       + timeout_clone  = 1800
+16:51:00.597 STDOUT tofu:       + timeout_create = 1800
+16:51:00.598 STDOUT tofu:       + timeout_delete = 60
+16:51:00.598 STDOUT tofu:       + timeout_start  = 300
+16:51:00.598 STDOUT tofu:       + timeout_update = 1800
+16:51:00.598 STDOUT tofu:       + unprivileged   = true
+16:51:00.598 STDOUT tofu:       + vm_id          = 2004
+16:51:00.598 STDOUT tofu:       + cpu {
+16:51:00.598 STDOUT tofu:           + architecture = "amd64"
+16:51:00.598 STDOUT tofu:           + cores        = 2
+16:51:00.598 STDOUT tofu:           + limit        = 0
+16:51:00.598 STDOUT tofu:           + units        = (known after apply)
+16:51:00.598 Extracted...
+```
+
+### Ответы на архитектурные вопросы:
+
+
+Run terragrunt init and terragrunt plan. If your resources are already created by Assignment 2, explain in your README why the plan is not empty (different state file) and how you would avoid managing the same resources twice.
+1. **Почему после применения OpenTofu план Terragrunt не пустой и как избежать двойного менеджмента?**
+   * План не пустой, потому что Terragrunt использует **свой собственный независимый файл состояния (state file)**, хранящийся по умолчанию в локальном кэше директории (`.terragrunt-cache/`), и на данный момент ничего «не знает» про стейт, созданный чистым OpenTofu.
+   * **Как избежать:** Чтобы не создавать дубликаты ресурсов, необходимо перенести (скопировать) существующий `terraform.tfstate` файл в рабочую директорию Terragrunt, либо выполнить команду импорта ресурсов `terragrunt import ...` для каждого созданного хоста.
+
+
+Explain what include and the generate block in the root config give you, and why the difference between two students is only in inputs
+2. **Что дают блоки `include` и `generate` в корневом конфиге? Почему разница между студентами только в inputs?**
+   * Блок `include` в `terragrunt.hcl` позволяет автоматически наследовать общие настройки, конфигурацию провайдеров и бэкенда для хранения стейта из родительских файлов (`root.hcl`), соблюдая принцип DRY.
+   * Блок `generate` в `root.hcl` динамически создает `.tf`-файлы (например, описание провайдеров `providers.tf` и требуемых версий `versions.tf`) на лету перед запуском Tofu.
+   * Разница между студентами заключается только в `inputs`, так как сама **логика и архитектура кода (модуль) абсолютно идентичны для всех**. Меняются только параметры конфигурации (ID пула, ID студента, IP подсети).
+Explain why pool_id lives in each student's unit and not in the shared root.hcl.
+3. **Почему `pool_id` живет в юните студента, а не в общем `root.hcl`?**
+   * Переменная `pool_id` является уникальным параметром окружения конкретного пользователя (студента). Размещение ее в общем `root.hcl` нарушило бы изоляцию конфигураций и сделало бы невозможным совместное использование центрального шаблона.
+
+---
+
+## 🛡️ Homework Assignment 4: Infrastructure Readiness Check
+
+### Доступ по SSH и механизм беспарольного root-входа
+Вход по SSH под пользователем `root` с паролем работает, несмотря на стандартные ограничения дистрибутивов Debian/Ubuntu, благодаря кастомизации на этапе инициализации хостов кодом автоматизации.
+
+**Два ключевых файла, задействованных в процессе:**
+1. `/etc/ssh/sshd_config` (или файлы-дропины в `/etc/ssh/sshd_config.d/*`) — в них директива `PermitRootLogin` принудительно выставляется в значение `yes`.
+2. `/root/.ssh/authorized_keys` — туда импортируется сгенерированный публичный ключ `id_rsa.pub` студента для авторизации.
+*Для LXC контейнеров настройки прокидываются через хуки/монтирование провайдера, а для виртуальных машин — через метаданные **Cloud-Init**.*
+
+### Соответствие IP-адресов и QEMU Guest Agent
+Конфигурация сетевых интерфейсов виртуальных машин успешно применилась из настроек Cloud-Init (что подтверждено во вкладке Cloud-Init в UI Proxmox). 
+Благодаря установленному в шаблоне и активированному в коде `qemu-guest-agent`, OpenTofu динамически считывает и отдает в `outputs` реальные IP-адреса, полученные операционной системой изнутри виртуальной машины, полностью соответствующие объявленным в коде.
+
+### Логика работы с таблицей соседей (`ip neigh`)
+Если свежесозданный хост не отвечает на первый `ping`, это может быть вызвано тем, что в ARP-кэше хост-машины (или маршрутизатора) устарела запись для данного IP-адреса (ранее этот IP мог принадлежать удаленной машине другого студента). 
+Команда `ip neigh` (или `arp -an`) показывает состояние соседних сетевых адресов. В случае невалидного MAC-адреса требуется очистить кэш командой `ip neigh flush to <IP-адрес>`.
+
+---
+
+## 🧪 Homework Assignment 5: Configuration Changes (Optional)
+
+1. **Изменение параметров контейнера (Memory/Cores):**
+   * При изменении параметров памяти/ядер в контейнере LXC, OpenTofu выполняет обновление **in-place** (на лету), так как Proxmox поддерживает горячее изменение (hotplug) этих ресурсов без уничтожения контейнера.
+
+2. **Параметр `lifecycle { ignore_changes = [disk] }`:**
+   * Данный блок указывает OpenTofu игнорировать любые расхождения в конфигурации диска между кодом и реальным состоянием VM после её создания.
+   * **Зачем он нужен:** Виртуальная машина разворачивается из готового шаблона (template), у которого уже есть фиксированный размер диска. Без этой строчки OpenTofu при каждом запуске `plan/apply` пытался бы пересоздать или изменить диск, что привело бы к ошибкам провайдера или потере данных.
+
+3. **Попытка создания машин вне своего VMID блока:**
+   * При попытке указать чужой `student_id` Proxmox API возвращает ошибку `403 Forbidden` (Permission check failed).
+   * **Механизм защиты:** Ограничение права пользователя (ACL / RBAC) на токене студента в Proxmox VE. Токен имеет строгий scope полномочий, привязанный исключительно к диапазону VMID и пулу конкретного аккаунта.
