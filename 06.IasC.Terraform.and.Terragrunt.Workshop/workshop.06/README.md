@@ -3,8 +3,6 @@
 
 ### 📁 Final Repository Directory Structure
 
-В соответствии с требованиями воркшопа и принципом DRY (Don't Repeat Yourself), проект организован следующим образом:
-
 ```text
 06.IasC.Terraform.and.Terragrunt.Workshop/
 ├── README.md                          # Этот отчет по лабораторной работе
@@ -173,19 +171,16 @@ sandboxes = [
 ### Ответы на архитектурные вопросы:
 
 
-Run terragrunt init and terragrunt plan. If your resources are already created by Assignment 2, explain in your README why the plan is not empty (different state file) and how you would avoid managing the same resources twice.
-1. **Почему после применения OpenTofu план Terragrunt не пустой и как избежать двойного менеджмента?**
+1. ** Run terragrunt init and terragrunt plan. If your resources are already created by Assignment 2, explain in your README why the plan is not empty (different state file) and how you would avoid managing the same resources twice.**
    * План не пустой, потому что Terragrunt использует **свой собственный независимый файл состояния (state file)**, хранящийся по умолчанию в локальном кэше директории (`.terragrunt-cache/`), и на данный момент ничего «не знает» про стейт, созданный чистым OpenTofu.
    * **Как избежать:** Чтобы не создавать дубликаты ресурсов, необходимо перенести (скопировать) существующий `terraform.tfstate` файл в рабочую директорию Terragrunt, либо выполнить команду импорта ресурсов `terragrunt import ...` для каждого созданного хоста.
 
 
-Explain what include and the generate block in the root config give you, and why the difference between two students is only in inputs
-2. **Что дают блоки `include` и `generate` в корневом конфиге? Почему разница между студентами только в inputs?**
+2. **Explain what include and the generate block in the root config give you, and why the difference between two students is only in inputs**
    * Блок `include` в `terragrunt.hcl` позволяет автоматически наследовать общие настройки, конфигурацию провайдеров и бэкенда для хранения стейта из родительских файлов (`root.hcl`), соблюдая принцип DRY.
    * Блок `generate` в `root.hcl` динамически создает `.tf`-файлы (например, описание провайдеров `providers.tf` и требуемых версий `versions.tf`) на лету перед запуском Tofu.
    * Разница между студентами заключается только в `inputs`, так как сама **логика и архитектура кода (модуль) абсолютно идентичны для всех**. Меняются только параметры конфигурации (ID пула, ID студента, IP подсети).
-Explain why pool_id lives in each student's unit and not in the shared root.hcl.
-3. **Почему `pool_id` живет в юните студента, а не в общем `root.hcl`?**
+3. **Explain why pool_id lives in each student's unit and not in the shared root.hcl.**
    * Переменная `pool_id` является уникальным параметром окружения конкретного пользователя (студента). Размещение ее в общем `root.hcl` нарушило бы изоляцию конфигураций и сделало бы невозможным совместное использование центрального шаблона.
 
 ---
