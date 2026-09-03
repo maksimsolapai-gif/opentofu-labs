@@ -47,13 +47,11 @@
 | VM (Клон) | `k8s-8` | **1808** | **192.168.208.8** | 11. Kubernetes installation (kubespray) |
 
 ### Ответы на теоретические вопросы:
-Explain in your README why the sandbox and k8s hosts are numbered in pairs (n, n+1) while ws and k3s use the plain student_id
-1. **Почему `sandbox` и `k8s` хосты нумеруются парами `(n, n+1)`, а `ws` и `k3s` используют обычный `student_id`?**
+1. **Explain in your README why the sandbox and k8s hosts are numbered in pairs (n, n+1) while ws and k3s use the plain student_id**
    * Хосты `ws` (Ansible) и `k3s` (легковесный Kubernetes) создаются в единственном экземпляре на каждого студента для выполнения персональных однонодовых задач. 
    * Хосты `k8s` (ноды для полноценного кластера Kubespray) требуются в количестве **двух штук** на студента для отработки многонодовых конфигураций, распределения ролей (master/worker), настройки репликации и сетевого взаимодействия внутри кластеров.
 
-Explain why each student needs a separate VMID block and a separate pool, and which of the two is the hard limit.
-2. **Зачем каждому студенту отдельный блок VMID и пул? Какое из ограничений является жестким (hard limit)?**
+2. **Explain why each student needs a separate VMID block and a separate pool, and which of the two is the hard limit.**
    * **Разделение пулов (Pools):** Используется для разграничения прав доступа (RBAC) на уровне Proxmox VE. API-токен студента имеет права `VM.Allocate` и `VM.Audit` только внутри конкретного пула `student-04`. Это логическое ограничение видимости ресурсов.
    * **Разделение блоков VMID:** Это **жесткое ограничение (hard limit)** на уровне всего кластера Proxmox. Идентификаторы VMID должны быть абсолютно уникальными в рамках всей системы. Если бы два студента попытались создать виртуальную машину с одинаковым VMID, произошел бы критический конфликт на уровне конфигурации гипервизора, и Proxmox API отклонил бы запрос.
 
@@ -61,12 +59,9 @@ Explain why each student needs a separate VMID block and a separate pool, and wh
 
 ## 🛠️ Homework Assignment 2: Provision the hosts with OpenTofu
 
-### Шаги выполнения
-1. Экспортированы переменные окружения для работы с провайдером Proxmox (без сохранения секретов в коде): `PROXMOX_VE_ENDPOINT`, `PROXMOX_VE_API_TOKEN`, `PROXMOX_VE_INSECURE=true`, `TG_TF_PATH=tofu`.
-2. Сгенерирована пара SSH-ключей командой `ssh-keygen`.
-3. Выполнена инициализация в папке `terraform/`: `tofu init`.
-4. Запущен предварительный просмотр плана: `tofu plan -var student_id=4 -var pool_id=student-04` (План показал создание **6 ресурсов**).
-5. Выполнено применение конфигурации: `tofu apply -var student_id=4 -var pool_id=student-04`.
+1. Выполнена инициализация в папке `terraform/`: `tofu init`.
+2. Запущен предварительный просмотр плана: `tofu plan -var student_id=4 -var pool_id=student-04` (План показал создание **6 ресурсов**).
+
 
 ### Проверка идемпотентности
 При повторном вызове команды `tofu apply` инфраструктура осталась без изменений, что подтверждает свойство идемпотентности декларативного подхода IaaC:
@@ -172,7 +167,7 @@ sandboxes = [
 
 
 1. ** Run terragrunt init and terragrunt plan. If your resources are already created by Assignment 2, explain in your README why the plan is not empty (different state file) and how you would avoid managing the same resources twice.**
-   * План не пустой, потому что Terragrunt использует **свой собственный независимый файл состояния (state file)**, хранящийся по умолчанию в локальном кэше директории (`.terragrunt-cache/`), и на данный момент ничего «не знает» про стейт, созданный чистым OpenTofu.
+   * Terragrunt использует **свой собственный независимый файл состояния (state file)**, хранящийся по умолчанию в локальном кэше директории (`.terragrunt-cache/`), и на данный момент ничего «не знает» про стейт, созданный чистым OpenTofu.
    * **Как избежать:** Чтобы не создавать дубликаты ресурсов, необходимо перенести (скопировать) существующий `terraform.tfstate` файл в рабочую директорию Terragrunt, либо выполнить команду импорта ресурсов `terragrunt import ...` для каждого созданного хоста.
 
 
@@ -188,20 +183,17 @@ sandboxes = [
 ## 🛡️ Homework Assignment 4: Infrastructure Readiness Check
 
 ### Доступ по SSH и механизм беспарольного root-входа
-Вход по SSH под пользователем `root` с паролем работает, несмотря на стандартные ограничения дистрибутивов Debian/Ubuntu, благодаря кастомизации на этапе инициализации хостов кодом автоматизации.
+Вход по SSH под пользователем `root` работает, несмотря на стандартные ограничения дистрибутивов Debian/Ubuntu.
 
 **Два ключевых файла, задействованных в процессе:**
-1. `/etc/ssh/sshd_config` (или файлы-дропины в `/etc/ssh/sshd_config.d/*`) — в них директива `PermitRootLogin` принудительно выставляется в значение `yes`.
-2. `/root/.ssh/authorized_keys` — туда импортируется сгенерированный публичный ключ `id_rsa.pub` студента для авторизации.
-*Для LXC контейнеров настройки прокидываются через хуки/монтирование провайдера, а для виртуальных машин — через метаданные **Cloud-Init**.*
+В файлах container.tf и vms.tf есть ```provisioner```, который выполняет скрипт настройки root доступа 
+
 
 ### Соответствие IP-адресов и QEMU Guest Agent
 Конфигурация сетевых интерфейсов виртуальных машин успешно применилась из настроек Cloud-Init (что подтверждено во вкладке Cloud-Init в UI Proxmox). 
 Благодаря установленному в шаблоне и активированному в коде `qemu-guest-agent`, OpenTofu динамически считывает и отдает в `outputs` реальные IP-адреса, полученные операционной системой изнутри виртуальной машины, полностью соответствующие объявленным в коде.
 
-### Логика работы с таблицей соседей (`ip neigh`)
-Если свежесозданный хост не отвечает на первый `ping`, это может быть вызвано тем, что в ARP-кэше хост-машины (или маршрутизатора) устарела запись для данного IP-адреса (ранее этот IP мог принадлежать удаленной машине другого студента). 
-Команда `ip neigh` (или `arp -an`) показывает состояние соседних сетевых адресов. В случае невалидного MAC-адреса требуется очистить кэш командой `ip neigh flush to <IP-адрес>`.
+
 
 ---
 
