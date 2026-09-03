@@ -40,8 +40,8 @@
 | Ресурс (Тип) | Имя хоста | VMID | IP-адрес | Назначение / Будущий воркшоп |
 | :--- | :--- | :--- | :--- | :--- |
 | LXC Container | `ws-4` | **2004** | **192.168.201.4** | 08. Ansible. Workshop |
-| LXC Container | `sa-7` | **3007** | **192.168.202.7** | 08. Ansible. Workshop |
-| LXC Container | `sa-8` | **3008** | **192.168.202.8** | 08. Ansible. Workshop |
+| LXC Container | `sa-7` | **3007** | **192.168.202.7** | sandbox |
+| LXC Container | `sa-8` | **3008** | **192.168.202.8** | sandbox |
 | VM (Клон) | `k3s-4` | **1304** | **192.168.203.4** | 11. Kubernetes installation (k3s) |
 | VM (Клон) | `k8s-7` | **1807** | **192.168.208.7** | 11. Kubernetes installation (kubespray) |
 | VM (Клон) | `k8s-8` | **1808** | **192.168.208.8** | 11. Kubernetes installation (kubespray) |
@@ -186,26 +186,24 @@ sandboxes = [
 Вход по SSH под пользователем `root` работает, несмотря на стандартные ограничения дистрибутивов Debian/Ubuntu.
 
 **Два ключевых файла, задействованных в процессе:**
-В файлах container.tf и vms.tf есть ```provisioner```, который выполняет скрипт настройки root доступа 
+В файлах container.tf и vms.tf есть ```provisioner "remote-exec"```, который выполняет скрипт настройки доступа.
 
 
-### Соответствие IP-адресов и QEMU Guest Agent
+### Соответствие IP-адресов
 Конфигурация сетевых интерфейсов виртуальных машин успешно применилась из настроек Cloud-Init (что подтверждено во вкладке Cloud-Init в UI Proxmox). 
-Благодаря установленному в шаблоне и активированному в коде `qemu-guest-agent`, OpenTofu динамически считывает и отдает в `outputs` реальные IP-адреса, полученные операционной системой изнутри виртуальной машины, полностью соответствующие объявленным в коде.
-
 
 
 ---
 
 ## 🧪 Homework Assignment 5: Configuration Changes (Optional)
 
-1. **Изменение параметров контейнера (Memory/Cores):**
+1. **Change one parameter of a container (for example, memory or the number of cores) and show the plan diff: is the resource updated in place or replaced?**
    * При изменении параметров памяти/ядер в контейнере LXC, OpenTofu выполняет обновление **in-place** (на лету), так как Proxmox поддерживает горячее изменение (hotplug) этих ресурсов без уничтожения контейнера.
 
-2. **Параметр `lifecycle { ignore_changes = [disk] }`:**
+2. **Change a parameter of a VM that comes from the template (for example, the disk) and explain what lifecycle { ignore_changes = [disk] } in the module does and why it is there.**
    * Данный блок указывает OpenTofu игнорировать любые расхождения в конфигурации диска между кодом и реальным состоянием VM после её создания.
    * **Зачем он нужен:** Виртуальная машина разворачивается из готового шаблона (template), у которого уже есть фиксированный размер диска. Без этой строчки OpenTofu при каждом запуске `plan/apply` пытался бы пересоздать или изменить диск, что привело бы к ошибкам провайдера или потере данных.
 
-3. **Попытка создания машин вне своего VMID блока:**
+3. **Try to create a machine outside your VMID block (for example -var student_id=<someone else's id>) and show the error you get. Explain in your README what mechanism stopped you.**
    * При попытке указать чужой `student_id` Proxmox API возвращает ошибку `403 Forbidden` (Permission check failed).
    * **Механизм защиты:** Ограничение права пользователя (ACL / RBAC) на токене студента в Proxmox VE. Токен имеет строгий scope полномочий, привязанный исключительно к диапазону VMID и пулу конкретного аккаунта.
